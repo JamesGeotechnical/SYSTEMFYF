@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/MarkerCluster.css">
+        <link rel="stylesheet" href="css/MarkerCluster.Default.css">
+        <link rel="stylesheet" href="css/leaflet-search.css">
+        <link rel="stylesheet" href="css/leaflet-control-geocoder.Geocoder.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+
+              
+            
+          
+        <title>FIND YOUR FEET PROJECT TRACKING SYSTEM</title>
+    </head>
+    <body>
+        <h1>FYF SCHEME MONITORING SYSTEM</h1>
+        <p>This system monitor and track the FYF scheme data.</p>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/L.Control.Locate.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet-control-geocoder.Geocoder.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet.markercluster.js"></script>
+        <script src="js/leaflet-search.js"></script>
+        <script src="data/MalawiDistrict_1.js"></script>
+        <script src="data/schemes_2.js"></script>
+        <script src="data/socialjustice_3.js"></script>
+        <script src="data/Environmentalmanagementprojects_4.js"></script>
+        <script>
+            
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString' || e.target.feature.geometry.type === 'MultiLineString') {
+              highlightLayer.setStyle({
+                color: '#ffff00',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: '#ffff00',
+                fillOpacity: 1
+              });
+            }
+            highlightLayer.openPopup();
+        }
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        })
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // add class to format popup if it contains media
+		function addClassToPopupIfMedia(content, popup) {
+			var tempDiv = document.createElement('div');
+			tempDiv.innerHTML = content;
+			if (tempDiv.querySelector('td img')) {
+				popup._contentNode.classList.add('media');
+					// Delay to force the redraw
+					setTimeout(function() {
+						popup.update();
+					}, 10);
+			} else {
+				popup._contentNode.classList.remove('media');
+			}
+		}
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'feet',
+            secondaryLengthUnit: 'miles',
+            primaryAreaUnit: 'sqfeet',
+            secondaryAreaUnit: 'sqmiles'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+            if (bounds_group.getLayers().length) {
+                map.fitBounds(bounds_group.getBounds());
+            }
+            map.setMaxBounds(map.getBounds());
+        }
+        map.createPane('pane_OSMStandard_0');
+        map.getPane('pane_OSMStandard_0').style.zIndex = 400;
+        var layer_OSMStandard_0 = L.tileLayer('http://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            pane: 'pane_OSMStandard_0',
+            opacity: 1.0,
+            attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors, CC-BY-SA</a>',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+        layer_OSMStandard_0;
+        map.addLayer(layer_OSMStandard_0);
+        function pop_MalawiDistrict_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">DISTRICT</th>\
+                        <td class="visible-with-data" id="DISTRICT">' + (feature.properties['DISTRICT'] !== null ? autolinker.link(feature.properties['DISTRICT'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_MalawiDistrict_1_0(feature) {
+            if (feature.properties['q2wHide_Pop_Change'] >= -44.000000 && feature.properties['q2wHide_Pop_Change'] <= 4.400000 ) {
+                return {
+                pane: 'pane_MalawiDistrict_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(48,18,59,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['q2wHide_Pop_Change'] >= 4.400000 && feature.properties['q2wHide_Pop_Change'] <= 57.400000 ) {
+                return {
+                pane: 'pane_MalawiDistrict_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(40,188,235,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['q2wHide_Pop_Change'] >= 57.400000 && feature.properties['q2wHide_Pop_Change'] <= 74.200000 ) {
+                return {
+                pane: 'pane_MalawiDistrict_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(164,252,60,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['q2wHide_Pop_Change'] >= 74.200000 && feature.properties['q2wHide_Pop_Change'] <= 85.000000 ) {
+                return {
+                pane: 'pane_MalawiDistrict_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(251,126,33,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['q2wHide_Pop_Change'] >= 85.000000 && feature.properties['q2wHide_Pop_Change'] <= 99.000000 ) {
+                return {
+                pane: 'pane_MalawiDistrict_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(122,4,3,1.0)',
+                interactive: true,
+            }
+            }
+        }
+        map.createPane('pane_MalawiDistrict_1');
+        map.getPane('pane_MalawiDistrict_1').style.zIndex = 401;
+        map.getPane('pane_MalawiDistrict_1').style['mix-blend-mode'] = 'normal';
+        var layer_MalawiDistrict_1 = new L.geoJson(json_MalawiDistrict_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_MalawiDistrict_1',
+            layerName: 'layer_MalawiDistrict_1',
+            pane: 'pane_MalawiDistrict_1',
+            onEachFeature: pop_MalawiDistrict_1,
+            style: style_MalawiDistrict_1_0,
+        });
+        bounds_group.addLayer(layer_MalawiDistrict_1);
+        map.addLayer(layer_MalawiDistrict_1);
+        function pop_schemes_2(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2"><strong>SCHEMES</strong><br />' + (feature.properties['SCHEMES'] !== null ? autolinker.link(feature.properties['SCHEMES'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td class="visible-with-data" id="data"colspan="2"><strong>data</strong><br />' + (feature.properties['data'] !== null ? autolinker.link(feature.properties['data'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_schemes_2_0(feature) {
+            switch(String(feature.properties['SCHEMES'])) {
+                case 'SCHEME 10Y':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(97,235,147,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME B':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(210,131,85,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME E':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(229,47,162,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME H':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(97,36,202,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME JN':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(208,30,236,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME L':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(45,221,18,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME L2':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(121,201,190,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME N':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(205,76,93,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME PL':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(207,186,48,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME Y':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(30,57,236,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SCHEME3':
+                    return {
+                pane: 'pane_schemes_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(172,203,123,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_schemes_2');
+        map.getPane('pane_schemes_2').style.zIndex = 402;
+        map.getPane('pane_schemes_2').style['mix-blend-mode'] = 'normal';
+        var layer_schemes_2 = new L.geoJson(json_schemes_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_schemes_2',
+            layerName: 'layer_schemes_2',
+            pane: 'pane_schemes_2',
+            onEachFeature: pop_schemes_2,
+            style: style_schemes_2_0,
+        });
+        bounds_group.addLayer(layer_schemes_2);
+        map.addLayer(layer_schemes_2);
+        function pop_socialjustice_3(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">CENTRES</th>\
+                        <td>' + (feature.properties['CENTRES'] !== null ? autolinker.link(feature.properties['CENTRES'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_socialjustice_3_0(feature) {
+            switch(String(feature.properties['CENTRES'])) {
+                case 'Z00':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,255,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'ZONE F':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,219,219,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'ZONE H':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,182,182,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'ZONE L':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,146,146,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'ZONE1':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,109,109,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'ZONE3':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,73,73,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'ZONEK':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,36,36,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'NULL':
+                    return {
+                pane: 'pane_socialjustice_3',
+                radius: 10.4,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,0,0,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_socialjustice_3');
+        map.getPane('pane_socialjustice_3').style.zIndex = 403;
+        map.getPane('pane_socialjustice_3').style['mix-blend-mode'] = 'normal';
+        var layer_socialjustice_3 = new L.geoJson(json_socialjustice_3, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_socialjustice_3',
+            layerName: 'layer_socialjustice_3',
+            pane: 'pane_socialjustice_3',
+            onEachFeature: pop_socialjustice_3,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.circleMarker(latlng, style_socialjustice_3_0(feature));
+            },
+        });
+        var cluster_socialjustice_3 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_socialjustice_3.addLayer(layer_socialjustice_3);
+
+        bounds_group.addLayer(layer_socialjustice_3);
+        cluster_socialjustice_3.addTo(map);
+        function pop_Environmentalmanagementprojects_4(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">EMP</th>\
+                        <td class="visible-with-data" id="EMP">' + (feature.properties['EMP'] !== null ? autolinker.link(feature.properties['EMP'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Environmentalmanagementprojects_4_0(feature) {
+            switch(String(feature.properties['EMP'])) {
+                case 'EMP1':
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 10.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(198,122,201,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'EMP2':
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 8.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(74,145,206,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'EMP3':
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 6.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(56,236,182,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'EMP4':
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 4.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(175,205,55,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'EMP5':
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 4.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(61,16,220,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'EMP6':
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 4.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(230,119,28,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'EMP7':
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 4.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(127,227,122,1.0)',
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_Environmentalmanagementprojects_4',
+                radius: 4.0,
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(229,63,110,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_Environmentalmanagementprojects_4');
+        map.getPane('pane_Environmentalmanagementprojects_4').style.zIndex = 404;
+        map.getPane('pane_Environmentalmanagementprojects_4').style['mix-blend-mode'] = 'normal';
+        var layer_Environmentalmanagementprojects_4 = new L.geoJson(json_Environmentalmanagementprojects_4, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Environmentalmanagementprojects_4',
+            layerName: 'layer_Environmentalmanagementprojects_4',
+            pane: 'pane_Environmentalmanagementprojects_4',
+            onEachFeature: pop_Environmentalmanagementprojects_4,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.circleMarker(latlng, style_Environmentalmanagementprojects_4_0(feature));
+            },
+        });
+        var cluster_Environmentalmanagementprojects_4 = new L.MarkerClusterGroup({showCoverageOnHover: false,
+            spiderfyDistanceMultiplier: 2});
+        cluster_Environmentalmanagementprojects_4.addLayer(layer_Environmentalmanagementprojects_4);
+
+        bounds_group.addLayer(layer_Environmentalmanagementprojects_4);
+        cluster_Environmentalmanagementprojects_4.addTo(map);
+        var osmGeocoder = new L.Control.Geocoder({
+            collapsed: true,
+            position: 'topleft',
+            text: 'Search',
+            title: 'Testing'
+        }).addTo(map);
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+        .className += ' fa fa-search';
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+        .title += 'Search for a place';
+        var overlaysTree = [
+            {label: 'Environmental management projects<br /><table><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_EMP10.png" /></td><td>EMP1</td></tr><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_EMP21.png" /></td><td>EMP2</td></tr><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_EMP32.png" /></td><td>EMP3</td></tr><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_EMP43.png" /></td><td>EMP4</td></tr><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_EMP54.png" /></td><td>EMP5</td></tr><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_EMP65.png" /></td><td>EMP6</td></tr><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_EMP76.png" /></td><td>EMP7</td></tr><tr><td style="text-align: center;"><img src="legend/Environmentalmanagementprojects_4_7.png" /></td><td></td></tr></table>', layer: cluster_Environmentalmanagementprojects_4},
+            {label: 'social justice<br /><table><tr><td style="text-align: center;"><img src="legend/socialjustice_3_Z000.png" /></td><td>Z00</td></tr><tr><td style="text-align: center;"><img src="legend/socialjustice_3_ZONEF1.png" /></td><td>ZONE F</td></tr><tr><td style="text-align: center;"><img src="legend/socialjustice_3_ZONEH2.png" /></td><td>ZONE H</td></tr><tr><td style="text-align: center;"><img src="legend/socialjustice_3_ZONEL3.png" /></td><td>ZONE L</td></tr><tr><td style="text-align: center;"><img src="legend/socialjustice_3_ZONE14.png" /></td><td>ZONE1</td></tr><tr><td style="text-align: center;"><img src="legend/socialjustice_3_ZONE35.png" /></td><td>ZONE3</td></tr><tr><td style="text-align: center;"><img src="legend/socialjustice_3_ZONEK6.png" /></td><td>ZONEK</td></tr><tr><td style="text-align: center;"><img src="legend/socialjustice_3_7.png" /></td><td></td></tr></table>', layer: cluster_socialjustice_3},
+            {label: 'schemes<br /><table><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEME10Y0.png" /></td><td>SCHEME 10Y</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEB1.png" /></td><td>SCHEME B</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEE2.png" /></td><td>SCHEME E</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEH3.png" /></td><td>SCHEME H</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEJN4.png" /></td><td>SCHEME JN</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEL5.png" /></td><td>SCHEME L</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEL26.png" /></td><td>SCHEME L2</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEN7.png" /></td><td>SCHEME N</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEPL8.png" /></td><td>SCHEME PL</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEMEY9.png" /></td><td>SCHEME Y</td></tr><tr><td style="text-align: center;"><img src="legend/schemes_2_SCHEME310.png" /></td><td>SCHEME3</td></tr></table>', layer: layer_schemes_2},
+            {label: 'Malawi District<br /><table><tr><td style="text-align: center;"><img src="legend/MalawiDistrict_1_4440.png" /></td><td>-44 - 4</td></tr><tr><td style="text-align: center;"><img src="legend/MalawiDistrict_1_4571.png" /></td><td>4 - 57</td></tr><tr><td style="text-align: center;"><img src="legend/MalawiDistrict_1_57742.png" /></td><td>57 - 74</td></tr><tr><td style="text-align: center;"><img src="legend/MalawiDistrict_1_74853.png" /></td><td>74 - 85</td></tr><tr><td style="text-align: center;"><img src="legend/MalawiDistrict_1_85994.png" /></td><td>85 - 99</td></tr></table>', layer: layer_MalawiDistrict_1},
+            {label: "OSM Standard", layer: layer_OSMStandard_0, radioGroup: 'bm' },]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: false, 
+        });
+        lay.addTo(map);
+		document.addEventListener("DOMContentLoaded", function() {
+            // set new Layers List height which considers toggle icon
+            function newLayersListHeight() {
+                var layerScrollbarElement = document.querySelector('.leaflet-control-layers-scrollbar');
+                if (layerScrollbarElement) {
+                    var layersListElement = document.querySelector('.leaflet-control-layers-list');
+                    var originalHeight = layersListElement.style.height 
+                        || window.getComputedStyle(layersListElement).height;
+                    var newHeight = parseFloat(originalHeight) - 50;
+                    layersListElement.style.height = newHeight + 'px';
+                }
+            }
+            var isLayersListExpanded = true;
+            var controlLayersElement = document.querySelector('.leaflet-control-layers');
+            var toggleLayerControl = document.querySelector('.leaflet-control-layers-toggle');
+            // toggle Collapsed/Expanded and apply new Layers List height
+            toggleLayerControl.addEventListener('click', function() {
+                if (isLayersListExpanded) {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                } else {
+                    controlLayersElement.classList.add('leaflet-control-layers-expanded');
+                }
+                isLayersListExpanded = !isLayersListExpanded;
+                newLayersListHeight()
+            });	
+			// apply new Layers List height if toggle layerstree
+			if (controlLayersElement) {
+				controlLayersElement.addEventListener('click', function(event) {
+					var toggleLayerHeaderPointer = event.target.closest('.leaflet-layerstree-header-pointer span');
+					if (toggleLayerHeaderPointer) {
+						newLayersListHeight();
+					}
+				});
+			}
+            // Collapsed/Expanded at Start to apply new height
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            // Collapsed touch/small screen
+            var isSmallScreen = window.innerWidth < 650;
+            if (isSmallScreen) {
+                setTimeout(function() {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                    isLayersListExpanded = !isLayersListExpanded;
+                }, 500);
+            }  
+        });       
+        setBounds();
+        var i = 0;
+        layer_schemes_2.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['SCHEMES'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Arial\', sans-serif;">' + layer.feature.properties['SCHEMES']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_schemes_2'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_socialjustice_3.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['CENTRES'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Arial\', sans-serif;">' + layer.feature.properties['CENTRES']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_socialjustice_3'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        var i = 0;
+        layer_Environmentalmanagementprojects_4.eachLayer(function(layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['EMP'] !== null?String('<div style="color: #323232; font-size: 10pt; font-family: \'Arial\', sans-serif;">' + layer.feature.properties['EMP']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_Environmentalmanagementprojects_4'});
+            labels.push(layer);
+            totalMarkers += 1;
+              layer.added = true;
+              addLabel(layer, i);
+              i++;
+        });
+        map.addControl(new L.Control.Search({
+            layer: cluster_schemes_2,
+            initial: false,
+            hideMarkerOnCollapse: true,
+            propertyName: 'data'}));
+        document.getElementsByClassName('search-button')[0].className +=
+         ' fa fa-binoculars';
+        resetLabels([layer_schemes_2,layer_socialjustice_3,layer_Environmentalmanagementprojects_4]);
+        map.on("zoomend", function(){
+            resetLabels([layer_schemes_2,layer_socialjustice_3,layer_Environmentalmanagementprojects_4]);
+        });
+        map.on("layeradd", function(){
+            resetLabels([layer_schemes_2,layer_socialjustice_3,layer_Environmentalmanagementprojects_4]);
+        });
+        map.on("layerremove", function(){
+            resetLabels([layer_schemes_2,layer_socialjustice_3,layer_Environmentalmanagementprojects_4]);
+        });
+        </script>
+    </body>
+</html>
